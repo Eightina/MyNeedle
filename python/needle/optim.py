@@ -24,9 +24,16 @@ class SGD(Optimizer):
         self.weight_decay = weight_decay
 
     def step(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        for (i, param) in enumerate(self.params):
+            if i not in self.u: # params can repeat
+                self.u[i] = 0 
+            if param.grad is None:
+                continue
+            # .data returns a Tensor, and we need it to be float32
+            grad_data = ndl.Tensor(param.grad.cached_data, dtype='float32').data\
+                + self.weight_decay * param.data
+            self.u[i] = self.momentum * self.u[i] + (1 - self.momentum) * grad_data
+            param.data = param.data - self.lr * self.u[i]
 
     def clip_grad_norm(self, max_norm=0.25):
         """
@@ -59,6 +66,17 @@ class Adam(Optimizer):
         self.v = {}
 
     def step(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        self.t += 1
+        for (i, param) in enumerate(self.params):
+            if i not in self.m:
+                self.m[i] = 0
+                self.v[i] = 0
+            if param.grad is None:
+                continue
+            grad_data = ndl.Tensor(param.grad.cached_data, dtype='float32').data\
+                + self.weight_decay * param.data
+            self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * grad_data
+            self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * grad_data**2
+            bias_m = self.m[i] / (1 - self.beta1**self.t)
+            bias_v = self.v[i] / (1 - self.beta2**self.t)
+            param.data = param.data - self.lr * bias_m / (bias_v**0.5 + self.eps)

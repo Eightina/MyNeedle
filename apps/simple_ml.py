@@ -1,20 +1,15 @@
-"""hw1/apps/simple_ml.py"""
-
 import struct
 import gzip
 import numpy as np
-
+import math
 import sys
-
+import numpy as array_api
 sys.path.append("python/")
 import needle as ndl
+from needle.autograd import Tensor
 
-import needle.nn as nn
-from apps.models import *
-import time
-device = ndl.cpu()
 
-def parse_mnist(image_filesname, label_filename):
+def parse_mnist(image_filename: str, label_filename: str) -> tuple:
     """Read an images and labels file in MNIST format.  See this page:
     http://yann.lecun.com/exdb/mnist/ for a description of the file format.
 
@@ -30,18 +25,58 @@ def parse_mnist(image_filesname, label_filename):
                 dimension of the data, e.g., since MNIST images are 28x28, it
                 will be 784.  Values should be of type np.float32, and the data
                 should be normalized to have a minimum value of 0.0 and a
-                maximum value of 1.0.
+                maximum value of 1.0. The normalization should be applied uniformly
+                across the whole dataset, _not_ individual images.
 
-            y (numpy.ndarray[dypte=np.int8]): 1D numpy array containing the
-                labels of the examples.  Values should be of type np.int8 and
+            y (numpy.ndarray[dtype=np.uint8]): 1D numpy array containing the
+                labels of the examples.  Values should be of type np.uint8 and
                 for MNIST will contain the values 0-9.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    # get filename
+    new_paths = []
+    for path in [image_filename, label_filename]:
+        new_paths.append(path[: path.find(".gz")])
+
+    # decompressing
+    for path in new_paths:
+        with gzip.GzipFile(filename=path + ".gz", mode="rb") as uzf:
+            with open(file=path, mode="wb") as wf:
+                wf.write(uzf.read())
+            print("decompression done")
+
+    # reading X
+    with open(file=new_paths[0], mode="rb") as uzx:
+        mg_num = struct.unpack(">i", uzx.read(4))[0]
+        num_examples = struct.unpack(">i", uzx.read(4))[0]
+        height = struct.unpack(">i", uzx.read(4))[0]
+        width = struct.unpack(">i", uzx.read(4))[0]
+        input_dim = height * width
+        print(mg_num, num_examples, height, width, input_dim)
+
+        res_X = np.ndarray(shape=(num_examples, input_dim), dtype=np.dtype(np.float32))
+        temp_fmt = ">" + "B" * input_dim
+        for i in range(num_examples):
+            res_X[i] = struct.unpack(temp_fmt, uzx.read(input_dim))
+
+        # normalizing
+        res_X = res_X / (res_X.max() - res_X.min())
+        res_X = res_X + 0.5 - (res_X.min() + (res_X.max() - res_X.min()) / 2)
+
+    # reading y
+    with open(file=new_paths[1], mode="rb") as uzy:
+        mg_num = struct.unpack(">i", uzy.read(4))[0]
+        num_labels = struct.unpack(">i", uzy.read(4))[0]
+        print(mg_num, num_labels)
+
+        temp_fmt = ">" + "B" * num_labels
+        res_y = np.array(
+            struct.unpack(temp_fmt, uzy.read(num_labels)), dtype=np.dtype(np.uint8)
+        )
+
+    return (res_X, res_y)
 
 
-def softmax_loss(Z, y_one_hot):
+def softmax_loss(Z: Tensor, y_one_hot: Tensor):
     """Return softmax loss.  Note that for the purposes of this assignment,
     you don't need to worry about "nicely" scaling the numerical properties
     of the log-sum-exp computation, but can just compute this directly.
@@ -57,9 +92,23 @@ def softmax_loss(Z, y_one_hot):
     Returns:
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    Z_y: Tensor
+
+    # Z_y = ndl.ops.summation(
+    #     Z * y_one_hot, axes=(1,)
+    # )  # clear useless values & make it a vector
+    # Z_sum = ndl.ops.log(ndl.ops.summation(ndl.ops.exp(Z), axes=(1,)))
+    # res = ndl.ops.summation(Z_sum - Z_y, axes=(0,)) / Z.shape[0]
+    # return res
+
+    return (
+        ndl.ops.summation(
+            ndl.ops.log(ndl.ops.summation(ndl.ops.exp(Z), axes=(1,)))
+            - ndl.ops.summation(Z * y_one_hot, axes=(1,)),
+            axes=(0,),
+        )
+        / Z.shape[0]
+    )
 
 
 def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
@@ -86,151 +135,46 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
             W2: ndl.Tensor[np.float32]
     """
 
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    print("-" * 25)
+    def one_hot_enocoding(array: array_api.ndarray, num_classes: int):
+        return (array_api.eye(num_classes)[array])
+    
+    def norm(x: Tensor):
+        return x / x.sum(axes=(1,)).reshape((x.shape[0],1))
+        
+    # def binary(x: Tensor):
+    itr = math.ceil(X.shape[0] / batch)
+    
+    for i in range(itr):
+        
+        start = i * batch
+        end = (i + 1) * batch
+        if (end <= X.shape[0]):
+            cur_batch = batch
+        else:
+            end = X.shape[0]
+            cur_batch = end - start
+        cur_X = Tensor(X[start : end]) # ne x id
+        cur_y = one_hot_enocoding(y[start : end], W2.shape[1]) # ne x nc
+        
+        Z1 = ndl.ops.relu(cur_X @ W1) # ne x hd
+        
+        G2 = norm(ndl.ops.exp(Z1 @ W2)) - cur_y # ne x nc
+        
+        # Iy = array_api.zeros_like(G2) 
+        # Iy[np.arange(cur_batch), cur_y] = 1
+        # G2 -= Iy
+        
+        G1 = ndl.ops.binary(Z1) * (G2 @ W2.transpose())
+        
+        gradient_W1 = 1 / cur_batch * (cur_X.transpose() @ G1)
+        gradient_W2 = 1 / cur_batch * (Z1.transpose() @ G2)
 
-### CIFAR-10 training ###
-def epoch_general_cifar10(dataloader, model, loss_fn=nn.SoftmaxLoss(), opt=None):
-    """
-    Iterates over the dataloader. If optimizer is not None, sets the
-    model to train mode, and for each batch updates the model parameters.
-    If optimizer is None, sets the model to eval mode, and simply computes
-    the loss/accuracy.
-
-    Args:
-        dataloader: Dataloader instance
-        model: nn.Module instance
-        loss_fn: nn.Module instance
-        opt: Optimizer instance (optional)
-
-    Returns:
-        avg_acc: average accuracy over dataset
-        avg_loss: average loss over dataset
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
-
-def train_cifar10(model, dataloader, n_epochs=1, optimizer=ndl.optim.Adam,
-          lr=0.001, weight_decay=0.001, loss_fn=nn.SoftmaxLoss):
-    """
-    Performs {n_epochs} epochs of training.
-
-    Args:
-        dataloader: Dataloader instance
-        model: nn.Module instance
-        n_epochs: number of epochs (int)
-        optimizer: Optimizer class
-        lr: learning rate (float)
-        weight_decay: weight decay (float)
-        loss_fn: nn.Module class
-
-    Returns:
-        avg_acc: average accuracy over dataset from last epoch of training
-        avg_loss: average loss over dataset from last epoch of training
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+        W1 -= lr * gradient_W1
+        W2 -= lr * gradient_W2
+    return (W1, W2)
 
 
-def evaluate_cifar10(model, dataloader, loss_fn=nn.SoftmaxLoss):
-    """
-    Computes the test accuracy and loss of the model.
-
-    Args:
-        dataloader: Dataloader instance
-        model: nn.Module instance
-        loss_fn: nn.Module class
-
-    Returns:
-        avg_acc: average accuracy over dataset
-        avg_loss: average loss over dataset
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
-
-### PTB training ###
-def epoch_general_ptb(data, model, seq_len=40, loss_fn=nn.SoftmaxLoss(), opt=None,
-        clip=None, device=None, dtype="float32"):
-    """
-    Iterates over the data. If optimizer is not None, sets the
-    model to train mode, and for each batch updates the model parameters.
-    If optimizer is None, sets the model to eval mode, and simply computes
-    the loss/accuracy.
-
-    Args:
-        data: data of shape (nbatch, batch_size) given from batchify function
-        model: LanguageModel instance
-        seq_len: i.e. bptt, sequence length
-        loss_fn: nn.Module instance
-        opt: Optimizer instance (optional)
-        clip: max norm of gradients (optional)
-
-    Returns:
-        avg_acc: average accuracy over dataset
-        avg_loss: average loss over dataset
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
-
-def train_ptb(model, data, seq_len=40, n_epochs=1, optimizer=ndl.optim.SGD,
-          lr=4.0, weight_decay=0.0, loss_fn=nn.SoftmaxLoss, clip=None,
-          device=None, dtype="float32"):
-    """
-    Performs {n_epochs} epochs of training.
-
-    Args:
-        model: LanguageModel instance
-        data: data of shape (nbatch, batch_size) given from batchify function
-        seq_len: i.e. bptt, sequence length
-        n_epochs: number of epochs (int)
-        optimizer: Optimizer class
-        lr: learning rate (float)
-        weight_decay: weight decay (float)
-        loss_fn: nn.Module class
-        clip: max norm of gradients (optional)
-
-    Returns:
-        avg_acc: average accuracy over dataset from last epoch of training
-        avg_loss: average loss over dataset from last epoch of training
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
-def evaluate_ptb(model, data, seq_len=40, loss_fn=nn.SoftmaxLoss,
-        device=None, dtype="float32"):
-    """
-    Computes the test accuracy and loss of the model.
-
-    Args:
-        model: LanguageModel instance
-        data: data of shape (nbatch, batch_size) given from batchify function
-        seq_len: i.e. bptt, sequence length
-        loss_fn: nn.Module class
-
-    Returns:
-        avg_acc: average accuracy over dataset
-        avg_loss: average loss over dataset
-    """
-    np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
-### CODE BELOW IS FOR ILLUSTRATION, YOU DO NOT NEED TO EDIT
 
 
 def loss_err(h, y):

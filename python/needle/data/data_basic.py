@@ -59,13 +59,14 @@ class DataLoader:
                                            range(batch_size, len(dataset), batch_size))
 
     def __iter__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        self.ptr = 0
         return self
 
     def __next__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if self.ptr == len(self.ordering):
+            raise StopIteration
+        cur_batch = self.ptr
+        self.ptr += 1
+        res = [Tensor(image) for image in self.dataset[self.ordering[cur_batch]]]
+        return tuple(res)
 

@@ -1,0 +1,92 @@
+// {
+// 	"version": "2.0.0",
+// 	"tasks": [
+// 		{
+// 			"type": "cppbuild",
+// 			"label": "C/C++: cl.exe 生成活动文件",
+// 			"command": "cl.exe",
+// 			"args": [
+// 				// "/ID:\\my_programs_git\\DeepLearningSystems\\hw0-main\\src",
+// 				// "/ID:\\programs\\envs\\python38\\include",
+// 				// "/ID:\\programs\\envs\\python38\\Include",
+// 				// "/ID:\\programs\\envs\\python38\\lib\\site-packages\\pybind11\\include",
+// 				"/ID:\\my_programs_git\\DLS-Course\\hw0-main\\src",
+// 				"/IC:\\ProgramData\\anaconda3\\include",
+// 				"/IC:\\Users\\Orion\\AppData\\Roaming\\Python\\Python311\\site-packages\\pybind11\\include",
+// 				"/O2",
+// 				"/Zi",
+// 				"/LD",
+// 				"/showIncludes",
+// 				"/EHsc",
+// 				"/nologo",
+// 				"/Fe${fileDirname}\\${fileBasenameNoExtension}.pyd",
+// 				"${file}",
+// 				// "D:\\programs\\envs\\python38\\libs\\python38.lib",
+// 				"C:\\ProgramData\\anaconda3\\libs\\python311.lib",
+// 				"/VERBOSE",
+// 				"/DLL",
+// 				"/OUT:simple_ml_ext.pyd"
+// 			],
+// 			"options": {
+// 				"cwd": "${fileDirname}"
+// 			},
+// 			"problemMatcher": [
+// 				"$msCompile"
+// 			],
+// 			"group": {
+// 				"kind": "build"
+// 			},
+// 			"detail": "编译器: cl.exe"
+// 		},
+// 		{
+// 			"type": "cppbuild",
+// 			"label": "C/C++: cl.exe 测试活动文件",
+// 			"command": "cl.exe",
+// 			"args": [
+// 				"/ID:\\my_programs_git\\DeepLearningSystems\\hw0-main\\src",
+// 				"/ID:\\programs\\envs\\python38\\include",
+// 				"/ID:\\programs\\envs\\python38\\Include",
+// 				"/ID:\\programs\\envs\\python38\\lib\\site-packages\\pybind11\\include",
+// 				"/Od",
+// 				"/Zi",
+// 				"/showIncludes",
+// 				"/EHsc",
+// 				"/nologo",
+// 				"/Fe${fileDirname}\\${fileBasenameNoExtension}.exe",
+// 				"${file}",
+// 				"D:\\programs\\envs\\python38\\libs\\python38.lib",
+// 				"/VERBOSE"
+// 			],
+// 			"options": {
+// 				"cwd": "${fileDirname}"
+// 			},
+// 			"problemMatcher": [
+// 				"$msCompile"
+// 			],
+// 			"group": {
+// 				"kind": "test"
+// 			},
+// 			"detail": "编译器: cl.exe"
+// 		},
+// 		// {
+// 		// 	"type": "cppbuild",
+// 		// 	"label": "C/C++: cl.exe 生成活动文件",
+// 		// 	"command": "cl.exe",
+// 		// 	"args": [
+// 		// 		"/Zi",
+// 		// 		"/EHsc",
+// 		// 		"/nologo",
+// 		// 		"/Fe${fileDirname}\\${fileBasenameNoExtension}.exe",
+// 		// 		"${file}"
+// 		// 	],
+// 		// 	"options": {
+// 		// 		"cwd": "${fileDirname}"
+// 		// 	},
+// 		// 	"problemMatcher": [
+// 		// 		"$msCompile"
+// 		// 	],
+// 		// 	"group": "build",
+// 		// 	"detail": "编译器: cl.exe"
+// 		// }
+// 	]
+// }
