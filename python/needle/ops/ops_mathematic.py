@@ -325,13 +325,11 @@ def relu(a):
 class Tanh(TensorOp):
     def compute(self, a):
         # return array_api.tanh(a)
-        self.cache_res = a.tanh()
-        return self.cache_res
+        return a.tanh()
 
     def gradient(self, out_grad, node):
         # return (out_grad * (1 - array_api.tanh(node.inputs[0])**2),)
-        # return out_grad * (1 - tanh(node.inputs[0])**2)
-        return out_grad * (1 - self.cache_res**2)
+        return out_grad * (1 - tanh(node.inputs[0])**2)
 
 
 def tanh(a):
@@ -357,7 +355,7 @@ class Stack(TensorOp):
         new_shape = list(std_shape)
         new_shape.insert(self.axis, len(args))
         
-        res = array_api.empty(shape=tuple(new_shape), dtype=args[0].dtype)
+        res = array_api.empty(shape=tuple(new_shape), dtype=args[0].dtype, device=args[0].device)
         slices = [slice(0, n) for n in new_shape]
         for (i, ndarray) in enumerate(args):
             slices[self.axis] = slice(i, i + 1)
@@ -405,76 +403,6 @@ class Split(TensorTupleOp):
 
 def split(a, axis):
     return Split(axis)(a)
-
-# class Stack(TensorOp):
-#     def __init__(self, axis: int):
-#         """
-#         Concatenates a sequence of arrays along a new dimension.
-#         Parameters:
-#         axis - dimension to concatenate along
-#         All arrays need to be of the same size.
-#         """
-#         self.axis = axis
-
-#     def compute(self, args):
-#         ### BEGIN YOUR SOLUTION
-#         assert len(args) > 0, "Stack needs at least one array!"
-#         shape = args[0].shape
-#         for a in args:
-#             assert shape == a.shape, "All arrays need to be of the same size!"
-#         n = len(args)
-#         new_shape = list(shape)
-#         new_shape.insert(self.axis, n)
-#         out = array_api.empty(new_shape, device=args[0].device)
-#         slices = [slice(0, s) for s in new_shape]
-#         for i, arr in enumerate(args):
-#             slices[self.axis] = slice(i, i + 1)
-#             out[tuple(slices)] = arr
-#         return out
-#         ### END YOUR SOLUTION
-
-
-#     def gradient(self, out_grad, node):
-#         ### BEGIN YOUR SOLUTION
-#         return split(out_grad, self.axis)
-#         ### END YOUR SOLUTION
-
-
-# def stack(args, axis):
-#     return Stack(axis)(make_tuple(*args))
-
-
-# class Split(TensorTupleOp):
-#     def __init__(self, axis: int):
-#         """
-#         Splits a tensor along an axis into a tuple of tensors.
-#         (The "inverse" of Stack)
-#         Parameters:
-#         axis - dimension to split
-#         """
-#         self.axis = axis
-
-#     def compute(self, A):
-#         ### BEGIN YOUR SOLUTION
-#         n = A.shape[self.axis] 
-#         new_shape = list(A.shape)
-#         new_shape.pop(self.axis)
-#         slices = [slice(0, s) for s in A.shape]
-#         splits = []
-#         for i in range(n):
-#             slices[self.axis] = slice(i, i+1)
-#             splits.append(A[tuple(slices)].compact().reshape(new_shape))
-#         return tuple(splits)
-#         ### END YOUR SOLUTION
-
-    # def gradient(self, out_grad, node):
-    #     ### BEGIN YOUR SOLUTION
-    #     return stack(out_grad, self.axis)
-    #     ### END YOUR SOLUTION
-
-
-# def split(a, axis):
-#     return Split(axis)(a)
 
 
 class Flip(TensorOp):
