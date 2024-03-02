@@ -560,7 +560,8 @@ class NDArray:
         if axis is None:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
             #out = NDArray.make((1,) * self.ndim, device=self.device)
-            out = NDArray.make((1,), device=self.device)
+            # out = NDArray.make((1,), device=self.device)
+            out = NDArray.make((1,) * (self.ndim if keepdims else 1), device=self.device)
 
         else:
             if isinstance(axis, (tuple, list)):
@@ -654,3 +655,15 @@ def sum(a, axis=None, keepdims=False):
 
 def flip(a, axes):
     return a.flip(axes)
+
+
+def matmul(a, b):
+    return a @ b
+
+
+def negative(a):
+    return -a
+
+
+def summation(a, axis=None, keepdims=False):
+    return a.sum(axis=axis, keepdims=keepdims)

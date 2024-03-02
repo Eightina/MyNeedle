@@ -1,7 +1,7 @@
 """Core data structures."""
 import needle
 from .backend_numpy import Device, cpu, all_devices
-from typing import List, Optional, NamedTuple, Tuple, Union, Dict
+from typing import List, Optional, NamedTuple, Tuple, Union, Dict, Set
 from collections import namedtuple
 import numpy
 
@@ -157,6 +157,12 @@ class Value:
             value.realize_cached_data()
         return value
 
+    def numpy(self):
+        data = self.realize_cached_data()
+        if array_api is numpy:
+            return data
+        return data.numpy() if not isinstance(data, tuple) else [x.numpy() for x in data]
+
 
 ### Not needed in HW1
 class TensorTuple(Value):
@@ -199,7 +205,7 @@ class Tensor(Value):
         array,
         *,
         device: Optional[Device] = None,
-        dtype=None,
+        dtype="float32",
         requires_grad=True,
         **kwargs
     ):
@@ -283,9 +289,8 @@ class Tensor(Value):
     @property
     def device(self):
         data = self.realize_cached_data()
-        # numpy array always sits on cpu
         if array_api is numpy:
-            return cpu()
+            return default_device()
         return data.device
 
     def backward(self, out_grad=None):
@@ -302,12 +307,6 @@ class Tensor(Value):
     def __str__(self):
         return self.realize_cached_data().__str__()
 
-    def numpy(self):
-        data = self.realize_cached_data()
-        if array_api is numpy:
-            return data
-        return data.numpy()
-
     def __add__(self, other):
         if isinstance(other, Tensor):
             return needle.ops.EWiseAdd()(self, other)
@@ -322,7 +321,7 @@ class Tensor(Value):
 
     def __pow__(self, other):
         if isinstance(other, Tensor):
-            return needle.ops.EWisePow()(self, other)
+            raise NotImplementedError()
         else:
             return needle.ops.PowerScalar(other)(self)
 
@@ -331,6 +330,12 @@ class Tensor(Value):
             return needle.ops.EWiseAdd()(self, needle.ops.Negate()(other))
         else:
             return needle.ops.AddScalar(-other)(self)
+       
+    def __rsub__(self, other):
+        if isinstance(other, Tensor):
+            return needle.ops.EWiseAdd()(needle.ops.Negate()(self), other)
+        else:
+            return needle.ops.AddScalar(other)(-self)
 
     def __truediv__(self, other):
         if isinstance(other, Tensor):
@@ -361,7 +366,6 @@ class Tensor(Value):
 
     __radd__ = __add__
     __rmul__ = __mul__
-    __rsub__ = __sub__
     __rmatmul__ = __matmul__
 
 
@@ -384,20 +388,19 @@ def compute_gradient_of_variables(output_tensor, out_grad):
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
     
     for node in reverse_topo_order:
-        out_grad = 0
-        for i, adj in enumerate(node_to_output_grads_list[node]):
-            out_grad += adj
+        out_grad = sum_node_list(node_to_output_grads_list[node])
         node.grad = out_grad
-        if node.op != None:
-            temp_grads = node.op.gradient(out_grad, node)
-            for (i, ipt) in enumerate(node.inputs):
-                if ipt not in node_to_output_grads_list:
-                    node_to_output_grads_list[ipt] = [] 
-                node_to_output_grads_list[ipt].append(temp_grads[i])
+        if node.op is None:
+            continue
+        edges = node.op.gradient_as_tuple(out_grad, node)
+        for (ipt, edge) in zip(node.inputs, edges):
+            if ipt not in node_to_output_grads_list:
+                node_to_output_grads_list[ipt] = []
+            node_to_output_grads_list[ipt].append(edge)
     return
 
 
-def find_topo_sort(node_list: List[Value]) -> List[Value]:
+def find_topo_sort(node_list: List[Tensor]) -> List[Tensor]:
     """Given a list of nodes, return a topological sort list of nodes ending in them.
 
     A simple algorithm is to do a post-order DFS traversal on the given nodes,
@@ -413,21 +416,21 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
             topo_sort_dfs(node, topo_order, visited)
     return topo_order
 
-def topo_sort_dfs(node, visited, topo_order):
+def topo_sort_dfs(node: Value, topo_order: List[Value], visited: Set[Value]):
     """Post-order DFS"""
+    cur_order = []
     stack = [node]
     while stack:
         cur = stack[-1]
-        tail = True
+        cur_order.append(cur)
+        stack.pop()
         for nex in cur.inputs:
             if nex not in visited:
-                tail = False
                 visited.add(nex)
                 stack.append(nex)
-                break
-        if tail:
-            stack.pop();
-            topo_order.append(cur)
+
+    cur_order = reversed(cur_order)
+    topo_order.extend(cur_order)
     return
 
 

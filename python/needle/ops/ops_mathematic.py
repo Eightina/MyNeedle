@@ -97,7 +97,7 @@ class PowerScalar(TensorOp):
         self.scalar = scalar
 
     def compute(self, a: NDArray) -> NDArray:
-        return array_api.power(a, self.scalar)
+        return a ** self.scalar
 
     def gradient(self, out_grad, node):
         (ipt,) = node.inputs
@@ -143,16 +143,16 @@ class Transpose(TensorOp):
         self.axes = axes
 
     def compute(self, a):
-        if self.axes != None:
-            ax1, ax2 = self.axes
-            return array_api.swapaxes(a, ax1, ax2)
-        return array_api.swapaxes(a, a.ndim - 2, a.ndim - 1)
+        if self.axes:
+            ax0, ax1 = self.axes[0], self.axes[1]
+        else:
+            ax0, ax1 = a.ndim - 2, a.ndim - 1
+        permute_axes = list(range(a.ndim))
+        permute_axes[ax0], permute_axes[ax1] = ax1, ax0
+        return a.permute(permute_axes)
 
     def gradient(self, out_grad, node):
-        if self.axes == None:
-            self.axes = (out_grad.ndim - 2, out_grad.ndim - 1)
-        return (out_grad.transpose(axes=self.axes),)
-
+        return out_grad.transpose(self.axes)
 
 def transpose(a, axes=None):
     return Transpose(axes)(a)
@@ -199,16 +199,26 @@ class Summation(TensorOp):
         self.axes = axes
 
     def compute(self, a):
-        return array_api.sum(a, axis=self.axes)
+        if isinstance(self.axes, (list, tuple)) and len(self.axes) > 1:
+            # multiple axes case
+            for axis in reversed(sorted(self.axes)):
+                a = a.sum(axis = axis)
+            return a
+        return a.sum(axis=self.axes)
 
     def gradient(self, out_grad, node):
-        new_shape = list(out_grad.shape)
-        if self.axes != None:
-            for i in self.axes:
-                new_shape.insert(i, 1)
-        out_grad = reshape(out_grad, new_shape)
-        return (broadcast_to(out_grad, node.inputs[0].shape),)
-
+        new_shape = list(node.inputs[0].shape)
+        if self.axes is None:
+            axes = range(len(new_shape))
+        elif isinstance(self.axes, tuple):
+            axes = self.axes
+        elif isinstance(self.axes, int):
+            axes = (self.axes,)
+        else:
+            raise ValueError("Unsupported axes type, must be int, tuple or None!")
+        for axis in axes:
+            new_shape[axis] = 1
+        return out_grad.reshape(new_shape).broadcast_to(node.inputs[0].shape)
 
 def summation(a, axes=None):
     return Summation(axes)(a)
@@ -301,7 +311,7 @@ def binary(a):
 
 class ReLU(TensorOp):
     def compute(self, a):
-        return (array_api.abs(a) + a) / 2
+        return a.maximum(0)
 
     def gradient(self, out_grad, node):
         a = node.inputs[0].realize_cached_data()
@@ -314,14 +324,14 @@ def relu(a):
 
 class Tanh(TensorOp):
     def compute(self, a):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        # return array_api.tanh(a)
+        self.cache_res = a.tanh()
+        return self.cache_res
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        # return (out_grad * (1 - array_api.tanh(node.inputs[0])**2),)
+        # return out_grad * (1 - tanh(node.inputs[0])**2)
+        return out_grad * (1 - self.cache_res**2)
 
 
 def tanh(a):
@@ -339,15 +349,25 @@ class Stack(TensorOp):
         self.axis = axis
 
     def compute(self, args: TensorTuple) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if (not args): raise IndexError("No arrays to stack");
+        std_shape = args[0].shape
+        for ndarray in args:
+            assert ndarray.shape == std_shape
+        
+        new_shape = list(std_shape)
+        new_shape.insert(self.axis, len(args))
+        
+        res = array_api.empty(shape=tuple(new_shape), dtype=args[0].dtype)
+        slices = [slice(0, n) for n in new_shape]
+        for (i, ndarray) in enumerate(args):
+            slices[self.axis] = slice(i, i + 1)
+            res[tuple(slices)] = ndarray
+        return res
+        
 
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        return split(out_grad, self.axis)
 
 
 def stack(args, axis):
@@ -365,18 +385,96 @@ class Split(TensorTupleOp):
         self.axis = axis
 
     def compute(self, A):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        split_n = A.shape[self.axis]
+        if (split_n < 1): raise ValueError("Ilegal dim for split");
+        if (len(A.shape) < 2): raise ValueError("Ilegal shape for split")
+
+        new_shape = list(A.shape)
+        del new_shape[self.axis]
+        
+        slices = [slice(0, n) for n in A.shape]
+        res = []
+        for i in range(split_n):
+            slices[self.axis] = slice(i, i + 1)
+            res.append(A[tuple(slices)].compact().reshape(new_shape))
+        return tuple(res)
+        
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
-
+        return stack(out_grad, self.axis)
 
 def split(a, axis):
     return Split(axis)(a)
+
+# class Stack(TensorOp):
+#     def __init__(self, axis: int):
+#         """
+#         Concatenates a sequence of arrays along a new dimension.
+#         Parameters:
+#         axis - dimension to concatenate along
+#         All arrays need to be of the same size.
+#         """
+#         self.axis = axis
+
+#     def compute(self, args):
+#         ### BEGIN YOUR SOLUTION
+#         assert len(args) > 0, "Stack needs at least one array!"
+#         shape = args[0].shape
+#         for a in args:
+#             assert shape == a.shape, "All arrays need to be of the same size!"
+#         n = len(args)
+#         new_shape = list(shape)
+#         new_shape.insert(self.axis, n)
+#         out = array_api.empty(new_shape, device=args[0].device)
+#         slices = [slice(0, s) for s in new_shape]
+#         for i, arr in enumerate(args):
+#             slices[self.axis] = slice(i, i + 1)
+#             out[tuple(slices)] = arr
+#         return out
+#         ### END YOUR SOLUTION
+
+
+#     def gradient(self, out_grad, node):
+#         ### BEGIN YOUR SOLUTION
+#         return split(out_grad, self.axis)
+#         ### END YOUR SOLUTION
+
+
+# def stack(args, axis):
+#     return Stack(axis)(make_tuple(*args))
+
+
+# class Split(TensorTupleOp):
+#     def __init__(self, axis: int):
+#         """
+#         Splits a tensor along an axis into a tuple of tensors.
+#         (The "inverse" of Stack)
+#         Parameters:
+#         axis - dimension to split
+#         """
+#         self.axis = axis
+
+#     def compute(self, A):
+#         ### BEGIN YOUR SOLUTION
+#         n = A.shape[self.axis] 
+#         new_shape = list(A.shape)
+#         new_shape.pop(self.axis)
+#         slices = [slice(0, s) for s in A.shape]
+#         splits = []
+#         for i in range(n):
+#             slices[self.axis] = slice(i, i+1)
+#             splits.append(A[tuple(slices)].compact().reshape(new_shape))
+#         return tuple(splits)
+#         ### END YOUR SOLUTION
+
+    # def gradient(self, out_grad, node):
+    #     ### BEGIN YOUR SOLUTION
+    #     return stack(out_grad, self.axis)
+    #     ### END YOUR SOLUTION
+
+
+# def split(a, axis):
+#     return Split(axis)(a)
 
 
 class Flip(TensorOp):

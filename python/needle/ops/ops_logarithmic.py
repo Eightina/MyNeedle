@@ -27,45 +27,29 @@ class LogSumExp(TensorOp):
     def __init__(self, axes: Optional[tuple] = None):
         self.axes = axes
 
+
     def compute(self, Z):
-        # keepdims is important
-        maxZ = array_api.max(Z, axis = self.axes, keepdims=True)
+        maxZ = Z.max(axis=self.axes, keepdims=True)  # max with og dim (shape changed)
+        maxZ_reduce = Z.max(axis=self.axes)          # og val with reduced dim
         res = array_api.log(
-            array_api.sum(
-                    array_api.exp(Z - maxZ),
+            array_api.summation(
+                    array_api.exp(Z - maxZ.broadcast_to(Z.shape)),  # expand shape back
                     axis=self.axes,
-                    keepdims=True 
-                )
-            ) + maxZ
-        if self.axes:
-            res_shape = []
-            for i, size in enumerate(Z.shape):
-                if i not in set(self.axes):
-                    res_shape.append(size)
-            # print(res_shape)
-            return res.reshape(tuple(res_shape))
-        else:
-            return res.reshape(-1) 
-        # when axes is none, all elements are summed, so result's dimension is 1,
-        # and can be automatically reshaped by appointing the shape param to be -1
+                ) # summation reduces dim
+            ) + maxZ_reduce 
+        return res
 
     def gradient(self, out_grad, node):
-        Z = node.inputs[0]
-        if self.axes:
-            shape = [1] * len(Z.shape)
-            s = set(self.axes)
-            j = 0
-            for i in range(len(shape)):
-                if i not in s:
-                    shape[i] = node.shape[j]
-                    j += 1
-            node_new = node.reshape(shape)
-            grad_new = out_grad.reshape(shape)
-        else:
-            node_new = node
-            grad_new = out_grad
-        return (grad_new * exp(Z - node_new),)
-
+        Z = node.inputs[0] # max operation is const, its gradient is 0
+        maxZ = Tensor(Z.realize_cached_data().max(axis=self.axes, keepdims=True), device=Z.device)
+        expZ = exp(Z - maxZ.broadcast_to(Z.shape))
+        grad_sum_expZ = 1 / summation(expZ, axes=self.axes)
+        expand_shape = list(Z.shape)
+        axes = range(len(expand_shape)) if self.axes is None else self.axes
+        for axis in axes:
+            expand_shape[axis] = 1
+        grad_expZ = grad_sum_expZ.reshape(expand_shape).broadcast_to(Z.shape)
+        return out_grad * expZ * grad_expZ 
 
 def logsumexp(a, axes=None):
     return LogSumExp(axes=axes)(a)
