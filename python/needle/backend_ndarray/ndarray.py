@@ -594,9 +594,15 @@ class NDArray:
         Flip this ndarray along the specified axes.
         Note: compact() before returning.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if (len(axes) > len(self._shape)): raise ValueError("ilegal param shape: len(axes) > len(self._shape)")
+        new_strides = list(self._strides)
+        new_offset = 0
+        for ax in axes:
+            new_strides[ax] = -new_strides[ax]
+        for ax in axes:
+            partial_offset = (self._shape[ax] - 1) * self._strides[ax]
+            new_offset += partial_offset
+        return NDArray.make(self.shape, tuple(new_strides), self._device, self._handle, new_offset).compact()
 
     def pad(self, axes):
         """
@@ -604,9 +610,18 @@ class NDArray:
         which lists for _all_ axes the left and right padding amount, e.g.,
         axes = ( (0, 0), (1, 1), (0, 0)) pads the middle axis with a 0 on the left and right side.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        if (len(axes) != len(self._shape)): raise ValueError("ilegal param shape: len(axes) != len(self._shape)")
+        new_shape = list(self._shape)
+        for (i, (p, l)) in enumerate(axes):
+            new_shape[i] += p + l
+        slices = []
+        for ((p, _), n) in zip(axes, self._shape):
+            slices.append(slice(p, p + n))
+        
+        padder = self._device.full(tuple(new_shape), 0.0)
+        padder[tuple(slices)] = self
+        return padder
+            
 
 def array(a, dtype="float32", device=None):
     """Convenience methods to match numpy a bit more closely."""
