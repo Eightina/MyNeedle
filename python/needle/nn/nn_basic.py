@@ -91,20 +91,22 @@ class Linear(Module):
         self.device = device
         
         self.weight = Parameter(init.kaiming_uniform(
-            fan_in=self.in_features,
-            fan_out=self.out_features,
-            device=self.device
+            fan_in=in_features,
+            fan_out=out_features,
+            device=device,
+            dtype=dtype
         ))
 
         if not self.biased:
             self.bias = None
             return
         self.bias = Parameter(init.kaiming_uniform(
-                fan_in=self.out_features,
+                fan_in=out_features,
                 fan_out=1,
-                device=self.device
+                device=device,
+                dtype=dtype
             ).reshape(
-                (1, self.out_features)
+                (1, out_features)
             ))
 
     def forward(self, X: Tensor) -> Tensor:
@@ -160,29 +162,29 @@ class BatchNorm1d(Module):
         self.dim = dim
         self.eps = eps
         self.momentum = momentum
-        self.weight = Parameter(init.ones(dim, requires_grad=True))
-        self.bias = Parameter(init.zeros(dim, requires_grad=True))
-        self.running_mean = init.zeros(dim, requires_grad=False)
-        self.running_var = init.ones(dim, requires_grad=False)
+        self.weight = Parameter(init.ones(dim, requires_grad=True, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, requires_grad=True, device=device, dtype=dtype))
+        self.running_mean = init.zeros(dim, requires_grad=False, device=device, dtype=dtype)
+        self.running_var = init.ones(dim, requires_grad=False, device=device, dtype=dtype)
 
     def forward(self, x: Tensor) -> Tensor:
         batches = x.shape[0]
-        broadcasted_b = self.bias.broadcast_to(x.shape)
-        broadcasted_w = self.weight.broadcast_to(x.shape)
+        broadcasted_b = self.bias.reshape((1, self.dim)).broadcast_to(x.shape)
+        broadcasted_w = self.weight.reshape((1, self.dim)).broadcast_to(x.shape)
         if self.training:
-            E = x.sum(axes=(0,)).reshape((self.dim)) / batches
-            broadcasted_E = E.broadcast_to(x.shape)
-            Var = ((x - broadcasted_E) ** 2).sum(axes=(0,)).reshape((self.dim)) / batches
+            E = x.sum(axes=(0,)) / batches
+            broadcasted_E = E.reshape((1, self.dim)).broadcast_to(x.shape)
+            Var = ((x - broadcasted_E) ** 2).sum(axes=(0,)) / batches
             
             self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * E.data
             self.running_var = (1 - self.momentum) * self.running_var + self.momentum * Var.data
             
-            x_std = (Var.broadcast_to(x.shape) + self.eps) ** 0.5
+            x_std = (Var.reshape((1, self.dim)).broadcast_to(x.shape) + self.eps) ** 0.5
             x_normed = (x - broadcasted_E) / x_std
             
         else:
-            x_normed = (x - self.running_mean.broadcast_to(x.shape)) / \
-                            ((self.running_var + self.eps) ** 0.5).broadcast_to(x.shape)
+            x_normed = (x - self.running_mean.reshape((1, self.dim)).broadcast_to(x.shape)) / \
+                            ((self.running_var + self.eps) ** 0.5).reshape((1, self.dim)).broadcast_to(x.shape)
                             
         return broadcasted_w * x_normed + broadcasted_b
 
@@ -203,8 +205,8 @@ class LayerNorm1d(Module):
         super().__init__()
         self.dim = dim
         self.eps = eps
-        self.weight = Parameter(init.ones((dim), requires_grad=True))
-        self.bias = Parameter(init.zeros((dim), requires_grad=True))
+        self.weight = Parameter(init.ones((dim), requires_grad=True, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros((dim), requires_grad=True, device=device, dtype=dtype))
 
     def forward(self, x: Tensor) -> Tensor:
         # It seems that E and Var still requires grad?? Why? 

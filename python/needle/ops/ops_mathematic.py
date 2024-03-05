@@ -178,7 +178,9 @@ class BroadcastTo(TensorOp):
         self.shape = shape
 
     def compute(self, a):
-        return array_api.broadcast_to(a, self.shape)
+        if a.shape == self.shape:
+            return a
+        return array_api.broadcast_to(a, self.shape).compact()
 
     def gradient(self, out_grad, node):
         ipt_shape = list(node.inputs[0].shape)
