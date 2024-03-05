@@ -27,11 +27,59 @@ class Conv(Module):
         self.kernel_size = kernel_size
         self.stride = stride
 
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        self.biased = bias
+        self.device = device
+        self.dtype = dtype
+        
+        self.weight = Parameter(init.kaiming_uniform(
+            fan_in=(kernel_size ** 2) * in_channels,
+            fan_out=(kernel_size ** 2) * out_channels,
+            shape=(kernel_size, kernel_size, in_channels, out_channels),
+            device=device,
+            dtype=dtype
+        ))
+        
+        if not self.biased:
+            self.bias = None
+        else:
+            bias_bound = 1.0 / (in_channels * kernel_size ** 2) ** 0.5
+            self.bias = Parameter(init.rand(
+                self.out_channels,
+                low=-bias_bound,
+                high=bias_bound,
+                device=device,
+                dtype=dtype
+            ))
+        
+        self.padding = (kernel_size - 1) // 2
+        
+        return
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        # x is originally NCHW
+        # we need NHWC
+        x = ops.ops_mathematic.transpose(
+            Tensor.transpose(x, (1, 2)),
+            (2, 3)
+        ) # this is NHWC
+        
+        conved = ops.ops_mathematic.conv(
+            a = x,
+            b = self.weight,
+            stride = self.stride,
+            padding = self.padding
+        ) # this is NHWC
+        
+        if self.biased:
+            reshaped_bias = self.bias.reshape((1, 1, 1, self.out_channels))
+            conved += ops.ops_mathematic.broadcast_to(
+                reshaped_bias, conved.shape
+            ) # this is NHWC
+            
+        conved = ops.ops_mathematic.transpose(
+            Tensor.transpose(conved, (2, 3)),
+            (1, 2)
+        ) # return NCHW
+        
+        return conved
+        
