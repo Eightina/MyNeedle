@@ -470,15 +470,41 @@ class Conv(TensorOp):
         self.padding = padding
 
     def compute(self, A, B):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        A = A.pad(((0,0), (self.padding, self.padding), (self.padding, self.padding),(0,0)))
+        N, H, W, C_in = A.shape            # A: (N, H+2p, W+2p, Cin)
+        K, K_, C_in_, C_out = B.shape      # B: (K, K, Cin, Cout)
+        Ns, Hs, Ws, Cs = A.strides
+        assert K == K_, "Conv kernel should be a square tensor"
+        assert C_in == C_in_, "Conv kernel and input are not compatible"
+        
+        inner_dim = K * K_ * C_in          # dim for matmul
+        out_H, out_W = (H - K + 1) // self.stride, (W - K + 1) // self.stride 
+        im2col =   A.as_strided(  
+                                shape=(N, out_H, out_W, K, K, C_in),
+                                strides=(Ns, Hs * self.stride, Ws * self.stride, Hs, Ws, Cs)
+                                )\
+                    .compact()\
+                    .reshape((N * out_H * out_W, inner_dim))
+    
+        out = im2col @ B.compact().reshape((K * K_ * C_in_, C_out)) # (N * out_H * out_W, inner_dim) @ (inner_dim, C_out)
+        
+        return out.compact().reshape((N, out_H, out_W, C_out))      # out: (N, (H+2p-K+1)/s, (W+2p-K+1)/s, Cout)
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        X, W = node.inputs
+        K, _, _, _ = W.shape
 
+        if self.stride > 1:
+            out_grad = dilate(out_grad, (1, 2), self.stride - 1)        # out_grad      : (N, H+2p-K+1, W+2p-K+1, Cout) from above forward result
+        W_permute = transpose(flip(W, (0, 1)), (2, 3))                  # W_permute     : (K, K, Cout, Cin) as kernel
+        X_grad = conv(out_grad, W_permute, padding=K-1-self.padding)    # X_grad        : (N, (H+2p-K+1)+2(K-1-p)-K+1, (W+2p-K+1)+2(K-1-p)-K+1, Cin)
+                                                                        # ~             : (N, H, W, Cin)
+
+        X_permute = transpose(X, (0, 3))                                # X_permute     : (Cin, H, W, N) 
+        grad_permute = transpose(transpose(out_grad, (0, 1)), (1, 2))   # grad_permute  : (H+2p-K+1, W+2p-K+1, N, Cout) as kernel
+        W_grad = conv(X_permute, grad_permute, padding=self.padding)    # W_grad        : (Cin, H+2p-(H+2p-K+1)+1, W+2p-(W+2p-K+1)+1, Cout)
+        W_grad = transpose(transpose(W_grad, (0, 1)), (1, 2))           # W_grad        : (Cin, K, K, Cout)
+        return X_grad, W_grad
 
 def conv(a, b, stride=1, padding=1):
     return Conv(stride, padding)(a, b)
