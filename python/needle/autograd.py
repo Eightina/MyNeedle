@@ -1,6 +1,6 @@
 """Core data structures."""
 import needle
-from .backend_numpy import Device, cpu, all_devices
+from .backend_selection import Device, array_api, NDArray, default_device
 from typing import List, Optional, NamedTuple, Tuple, Union, Dict, Set
 from collections import namedtuple
 import numpy

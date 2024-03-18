@@ -30,7 +30,7 @@ class SGD(Optimizer):
             if param.grad is None:
                 continue
             # .data returns a Tensor, and we need it to be float32
-            grad_data = ndl.Tensor(param.grad.cached_data, dtype='float32').data\
+            grad_data = ndl.Tensor(param.grad.cached_data, dtype='float32', device=self.params[0].device).data\
                 + self.weight_decay * param.data
             self.u[i] = self.momentum * self.u[i] + (1 - self.momentum) * grad_data
             param.data = param.data - self.lr * self.u[i]
@@ -71,10 +71,10 @@ class Adam(Optimizer):
             if i not in self.m:
                 self.m[i] = 0
                 self.v[i] = 0
-            if param.grad is None:
-                continue
-            grad_data = ndl.Tensor(param.grad.cached_data, dtype='float32').data\
-                + self.weight_decay * param.data
+            if self.weight_decay > 0:
+                grad_data = param.grad.data + self.weight_decay * param.data
+            else:
+                grad_data = param.grad.data
             self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * grad_data
             self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * grad_data**2
             bias_m = self.m[i] / (1 - self.beta1**self.t)

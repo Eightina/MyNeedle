@@ -24,7 +24,7 @@ class BackendDevice:
     def __repr__(self):
         return self.name + "()"
 
-    def __getattr__(self, name):
+    def __getattr__(self, name): # this is the wrapper
         return getattr(self.mod, name)
 
     def enabled(self):

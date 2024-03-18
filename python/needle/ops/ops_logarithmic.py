@@ -43,13 +43,13 @@ class LogSumExp(TensorOp):
         Z = node.inputs[0] # max operation is const, its gradient is 0
         maxZ = Tensor(Z.realize_cached_data().max(axis=self.axes, keepdims=True), device=Z.device)
         expZ = exp(Z - maxZ.broadcast_to(Z.shape))
-        grad_sum_expZ = 1 / summation(expZ, axes=self.axes)
+        grad_sum_expZ = out_grad / summation(expZ, axes=self.axes)
         expand_shape = list(Z.shape)
         axes = range(len(expand_shape)) if self.axes is None else self.axes
         for axis in axes:
             expand_shape[axis] = 1
         grad_expZ = grad_sum_expZ.reshape(expand_shape).broadcast_to(Z.shape)
-        return out_grad * expZ * grad_expZ 
+        return grad_expZ * expZ
 
 def logsumexp(a, axes=None):
     return LogSumExp(axes=axes)(a)

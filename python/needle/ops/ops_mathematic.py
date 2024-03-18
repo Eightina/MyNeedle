@@ -8,9 +8,6 @@ from ..autograd import Op, Tensor, Value, TensorOp
 from ..autograd import TensorTuple, TensorTupleOp
 import numpy
 
-# NOTE: we will import numpy as the array_api
-# as the backend for our computations, this line will change in later homeworks
-
 from ..backend_selection import array_api, BACKEND 
 from .ops_tuple import *
 
@@ -163,7 +160,7 @@ class Reshape(TensorOp):
         self.shape = shape
 
     def compute(self, a):
-        return array_api.reshape(a, self.shape)
+        return a.compact().reshape(self.shape)
 
     def gradient(self, out_grad, node):
         return (out_grad.reshape(node.inputs[0].shape),)
@@ -294,22 +291,22 @@ def exp(a):
     return Exp()(a)
 
 
-class Binary(TensorOp):
-    def compute(self, a: NDArray):
-        return a.astype(array_api.bool8).astype(array_api.float32)
+# class Binary(TensorOp):
+#     def compute(self, a: NDArray):
+#         return a.astype(array_api.bool8).astype(array_api.float32)
 
-    def gradient(self, out_grad: Tensor, node: Tensor):
-        return (
-            Tensor(
-                [
-                    [0.0 for i in range(node.inputs[0].shape[1])]
-                    for j in range(node.inputs[0].shape[0])
-                ]
-            ),
-        )
+#     def gradient(self, out_grad: Tensor, node: Tensor):
+#         return (
+#             Tensor(
+#                 [
+#                     [0.0 for i in range(node.inputs[0].shape[1])]
+#                     for j in range(node.inputs[0].shape[0])
+#                 ]
+#             ),
+#         )
 
-def binary(a):
-    return Binary()(a)
+# def binary(a):
+#     return Binary()(a)
 
 class ReLU(TensorOp):
     def compute(self, a):
@@ -317,7 +314,7 @@ class ReLU(TensorOp):
 
     def gradient(self, out_grad, node):
         a = node.inputs[0].realize_cached_data()
-        mask = Tensor(a > 0, requires_grad=False)
+        mask = Tensor(a > 0, requires_grad=False, device=out_grad.device)
         return (out_grad * mask,)
 
 
